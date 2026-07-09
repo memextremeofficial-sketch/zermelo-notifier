@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a73e8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<title>Zermelo Uitval Notifier</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 16px; max-width: 480px; margin: 0 auto; }
+h1 { font-size: 1.3rem; margin-bottom: 16px; color: #1a73e8; display: flex; align-items: center; gap: 8px; }
+.card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: 4px; color: #555; }
+input, button { width: 100%; padding: 12px; border-radius: 8px; font-size: 1rem; }
+input { border: 1px solid #ddd; margin-bottom: 12px; }
+input:focus { outline: none; border-color: #1a73e8; }
+button { background: #1a73e8; color: #fff; border: none; font-weight: 600; cursor: pointer; }
+button:active { opacity: .8; }
+button:disabled { background: #999; cursor: not-allowed; }
+.btn-secondary { background: #fff; color: #1a73e8; border: 2px solid #1a73e8; }
+.hidden { display: none; }
+#status { font-size: .85rem; color: #666; margin-top: 8px; text-align: center; }
+#error { color: #d32f2f; font-size: .85rem; margin-top: 8px; text-align: center; }
+.lesson { border-left: 4px solid #4caf50; padding: 12px; margin-bottom: 8px; background: #fafafa; border-radius: 0 8px 8px 0; }
+.lesson.cancelled { border-left-color: #f44336; background: #fff5f5; }
+.lesson.changed { border-left-color: #ff9800; background: #fffbf0; }
+.lesson .time { font-size: .8rem; color: #888; }
+.lesson .subject { font-weight: 600; font-size: 1rem; }
+.lesson .detail { font-size: .85rem; color: #555; }
+.lesson .cancelled-badge { display: inline-block; background: #f44336; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 600; margin-top: 4px; }
+.lesson .changed-badge { display: inline-block; background: #ff9800; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: .75rem; font-weight: 600; margin-top: 4px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; }
+.badge-green { background: #e8f5e9; color: #2e7d32; }
+.badge-red { background: #ffebee; color: #c62828; }
+.header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.logout-btn { background: none; border: none; color: #d32f2f; font-size: .85rem; padding: 4px; width: auto; cursor: pointer; }
+#notif-perm { font-size: .8rem; padding: 4px 8px; border-radius: 4px; background: #fff3e0; color: #e65100; }
+.section-title { font-size: .9rem; font-weight: 600; margin: 12px 0 8px; color: #555; }
+.instruction { font-size: .85rem; color: #666; margin-bottom: 12px; line-height: 1.4; }
+code { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: .8rem; }
+.toggle-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.toggle-wrap label { margin-bottom: 0; }
+.switch { position: relative; width: 44px; height: 24px; display: inline-block; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 24px; transition: .3s; }
+.slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s; }
+.switch input:checked + .slider { background: #1a73e8; }
+.switch input:checked + .slider::before { transform: translateX(20px); }
+#date-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#date-nav button { width: auto; padding: 6px 12px; font-size: .85rem; }
+#date-nav span { font-weight: 600; font-size: .9rem; }
+#view-toggle { display: flex; gap: 4px; margin-bottom: 8px; }
+#view-toggle button { flex: 1; padding: 6px; font-size: .8rem; border-radius: 6px; }
+#view-toggle .active { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+.week-day-header { font-weight: 600; font-size: .85rem; color: #1a73e8; margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #ddd; }
+.week-day-header.today { color: #e65100; }
+.week-empty { font-size: .85rem; color: #999; padding: 4px 0 8px; }
+#last-check { font-size: .75rem; color: #999; text-align: center; margin-top: 8px; }
+.lesson-count { font-size: .8rem; color: #888; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+<div id="login-screen" class="card">
+  <h1>Zermelo Uitval Notifier</h1>
+  <p class="instruction">
+    Log in met je Zermelo-account om meldingen te krijgen wanneer een les uitvalt.
+  </p>
+  <label for="school">School (subdomain)</label>
+  <input type="text" id="school" placeholder="Bijv. 'mijneschool'" autocomplete="off">
+  <label for="authcode">Connect code</label>
+  <input type="text" id="authcode" placeholder="Koppelcode uit Zermelo portal" autocomplete="off">
+  <p class="instruction">
+    Ga naar <code>https://JOUWSCHOOL.zportal.nl</code> &gt; Koppel &gt; haal een koppelcode op.
+  </p>
+  <button id="login-btn">Inloggen</button>
+  <div id="error"></div>
+  <div id="status"></div>
+</div>
+
+<div id="main-screen" class="hidden">
+  <div class="header-bar">
+    <h1>Zermelo Uitval</h1>
+    <button class="logout-btn" id="logout-btn">Uitloggen</button>
+  </div>
+
+  <div id="notif-perm" class="hidden">Meldingen uitgeschakeld</div>
+
+  <div class="card">
+    <div class="toggle-wrap">
+      <label class="switch">
+        <input type="checkbox" id="monitor-toggle" checked>
+        <span class="slider"></span>
+      </label>
+      <label>Automatisch controleren op uitval</label>
+    </div>
+    <p class="instruction" style="margin-bottom:0;font-size:.8rem;">
+      De app controleert elke 5 minuten op nieuwe uitval.
+    </p>
+    <div id="notif-status" style="font-size:.75rem;color:#888;margin-top:6px;"></div>
+  </div>
+
+  <div id="view-toggle">
+    <button id="view-day" class="active">Dag</button>
+    <button id="view-week">Week</button>
+  </div>
+  <div id="date-nav">
+    <button id="prev-day">&larr;</button>
+    <span id="current-date"></span>
+    <button id="next-day">&rarr;</button>
+  </div>
+
+  <div id="lessons-container">
+    <p class="instruction" style="text-align:center;padding:20px 0;">Lessen laden...</p>
+  </div>
+
+  <div id="last-check"></div>
+</div>
+
+</div>
+
+<script>
+// ============================================================
+// Configuration
+// ============================================================
+const STORAGE_KEY = 'zermelo_uitval_data';
+const APPS_SCRIPT_URL = ''; // Vul hier de Apps Script URL in
+const CHECK_INTERVAL = 5 * 60 * 1000; // 5 min
+
+// ============================================================
+// State
+// ============================================================
+let state = {
+  school: '',
+  token: '',
+  userCode: '',
+  userName: '',
+  monitoring: true,
+  viewMode: 'day',
+  appointments: [],
+  knownCancelled: new Set(),
+  knownState: {},
+  currentDate: new Date(),
+  checkInterval: null,
+};
+
+// ============================================================
+// DOM refs
+// ============================================================
+const $ = (id) => document.getElementById(id);
+const loginScreen = $('login-screen');
+const mainScreen = $('main-screen');
+const schoolInp = $('school');
+const authcodeInp = $('authcode');
+const loginBtn = $('login-btn');
+const logoutBtn = $('logout-btn');
+const errorDiv = $('error');
+const statusDiv = $('status');
+const monitorToggle = $('monitor-toggle');
+const lessonsContainer = $('lessons-container');
+const currentDateSpan = $('current-date');
+const prevDayBtn = $('prev-day');
+const nextDayBtn = $('next-day');
+const lastCheckDiv = $('last-check');
+const notifPermDiv = $('notif-perm');
+const notifStatusDiv = $('notif-status');
+
+const viewDayBtn = $('view-day');
+const viewWeekBtn = $('view-week');
+
+// ============================================================
+// Storage helpers
+// ============================================================
+function saveState() {
+  const toStore = {
+    school: state.school,
+    token: state.token,
+    userCode: state.userCode,
+    userName: state.userName,
+    monitoring: state.monitoring,
+    knownCancelled: [...state.knownCancelled],
+    knownState: state.knownState,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      state.school = data.school || '';
+      state.token = data.token || '';
+      state.userCode = data.userCode || '';
+      state.userName = data.userName || '';
+      state.monitoring = data.monitoring !== false;
+      state.knownCancelled = new Set(data.knownCancelled || []);
+      state.knownState = data.knownState || {};
+      return true;
+    }
+  } catch (e) { /* ignore */ }
+  return false;
+}
+
+function clearState() {
+  localStorage.removeItem(STORAGE_KEY);
+  state.school = '';
+  state.token = '';
+  state.userCode = '';
+  state.userName = '';
+  state.monitoring = true;
+  state.knownCancelled = new Set();
+  state.knownState = {};
+  state.appointments = [];
+}
+
+// ============================================================
+// API helpers
+// ============================================================
+async function apiPost(endpoint, data) {
+  const url = `https://${state.school}.zportal.nl/api/v3/${endpoint}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(data),
+  });
+  if (!res.ok) throw new Error(`API fout: ${res.status}`);
+  return res.json();
+}
+
+async function apiGet(endpoint, params = {}) {
+  const url = `https://${state.school}.zportal.nl/api/v3/${endpoint}`;
+  params.access_token = state.token;
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`${url}?${qs}`);
+  if (!res.ok) throw new Error(`API fout: ${res.status}`);
+  return res.json();
+}
+
+// ============================================================
+// Authentication
+// ============================================================
+async function authenticate(school, code) {
+  state.school = school.toLowerCase().replace(/\.zportal\.nl$/, '');
+  const cleanCode = code.replace(/\s/g, '');
+  const data = await apiPost('oauth/token', {
+    grant_type: 'authorization_code',
+    code: cleanCode,
+  });
+  state.token = data.access_token;
+  if (!state.token) throw new Error('Geen access_token ontvangen');
+
+  const userData = await apiGet('users/~me');
+  const user = userData.response?.data?.[0];
+  if (user) {
+    state.userCode = user.code || '';
+    state.userName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  }
+
+  saveState();
+}
+
+// ============================================================
+// Appointments
+// ============================================================
+function formatDate(date) {
+  const days = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+  const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+  return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function getUnixRange(date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+  return { start: Math.floor(start / 1000), end: Math.floor(end / 1000) };
+}
+
+async function fetchAppointments(date) {
+  const { start, end } = getUnixRange(date);
+  const data = await apiGet('appointments', {
+    user: '~me',
+    start: String(start),
+    end: String(end),
+    fields: 'id,start,end,subjects,teachers,locations,groups,cancelled,valid,changeDescription,content,type,startTimeSlotName,endTimeSlotName,teacherChanged,locationChanged,timeChanged',
+  });
+  return data.response?.data || [];
+}
+
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatWeekRange(start) {
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const days = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+  const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    return `${days[start.getDay()]} ${start.getDate()} - ${end.getDate()} ${months[end.getMonth()]} ${end.getFullYear()}`;
+  }
+  return `${days[start.getDay()]} ${start.getDate()} ${months[start.getMonth()]} - ${days[end.getDay()]} ${end.getDate()} ${months[end.getMonth()]} ${end.getFullYear()}`;
+}
+
+async function fetchWeekAppointments(weekStart) {
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+  const data = await apiGet('appointments', {
+    user: '~me',
+    start: String(Math.floor(weekStart / 1000)),
+    end: String(Math.floor(weekEnd / 1000)),
+    fields: 'id,start,end,subjects,teachers,locations,groups,cancelled,valid,changeDescription,content,type,startTimeSlotName,endTimeSlotName,teacherChanged,locationChanged,timeChanged',
+  });
+  return data.response?.data || [];
+}
+
+// ============================================================
+// Registreer bij de backend (Apps Script) voor achtergrond checks
+// ============================================================
+async function registerToBackend() {
+  if (!APPS_SCRIPT_URL || !state.token || !state.school) return;
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'register',
+        school: state.school,
+        zermelo_token: state.token,
+      }),
+    });
+    console.log('Geregistreerd bij backend voor achtergrond push!');
+  } catch (e) {
+    console.warn('Backend registratie mislukt:', e.message);
+  }
+}
+
+
+function updateNotifStatus() {
+  notifStatusDiv.textContent = APPS_SCRIPT_URL
+    ? '🔔 Achtergrond meldingen actief via ntfy'
+    : '⚠️ Vul Apps Script URL in voor achtergrond meldingen';
+}
+
+function checkNotificationPermission() {
+  notifPermDiv.classList.add('hidden');
+  updateNotifStatus();
+}
+
+
+// ============================================================
+// Check for cancellations (lokale check elke 5 min)
+// ============================================================
+async function checkCancellations() {
+  if (!state.token) return;
+  try {
+    const datesToCheck = [];
+    for (let i = 0; i < 3; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      datesToCheck.push(d);
+    }
+
+    let notifications = [];
+    const seenIds = new Set();
+
+    for (const date of datesToCheck) {
+      const appointments = await fetchAppointments(date);
+      for (const app of appointments) {
+        seenIds.add(app.id);
+        const appId = app.id;
+        const subject = app.subjects?.[0] || 'Onbekend vak';
+        const startTime = app.start ? new Date(app.start * 1000) : null;
+        const timeStr = startTime ? `${startTime.getHours().toString().padStart(2,'0')}:${startTime.getMinutes().toString().padStart(2,'0')}` : '';
+        const dateStr = formatDate(date);
+        const prev = state.knownState[appId];
+
+        if (app.cancelled) {
+          if (!state.knownCancelled.has(appId)) {
+            state.knownCancelled.add(appId);
+            const reason = app.changeDescription || 'Uitval';
+            const dayLabel = i === 0 ? 'vandaag' : i === 1 ? 'morgen' : dateStr;
+            const endTime2 = app.end ? new Date(app.end * 1000) : null;
+            const endTimeStr = endTime2 ? `${endTime2.getHours().toString().padStart(2,'0')}:${endTime2.getMinutes().toString().padStart(2,'0')}` : '';
+            const fullTimeStr = endTimeStr ? `${timeStr}-${endTimeStr}` : timeStr;
+            const teacherStr = (app.teachers || []).join(', ');
+            const notifBody = [fullTimeStr, teacherStr].filter(Boolean).join(' ') + ' • ' + dayLabel;
+            notifications.push({ title: `${subject} uitgevallen`, body: notifBody });
+          }
+        } else {
+          state.knownCancelled.delete(appId);
+        }
+
+        const locs = (app.locations || []).sort().join(', ');
+        if (app.locationChanged && prev && prev.locations !== locs) {
+          const dayLabel2 = i === 0 ? 'vandaag' : i === 1 ? 'morgen' : dateStr;
+          const endTime3 = app.end ? new Date(app.end * 1000) : null;
+          const endTimeStr3 = endTime3 ? `${endTime3.getHours().toString().padStart(2,'0')}:${endTime3.getMinutes().toString().padStart(2,'0')}` : '';
+          const fullTimeStr3 = endTimeStr3 ? `${timeStr}-${endTimeStr3}` : timeStr;
+          notifications.push({ title: `${subject} lokaal gewijzigd`, body: `${fullTimeStr3} → ${locs || 'geen lokaal'} • ${dayLabel2}` });
+        }
+
+        const tchers = (app.teachers || []).sort().join(', ');
+        if (app.teacherChanged && prev && prev.teachers !== tchers) {
+          const dayLabel3 = i === 0 ? 'vandaag' : i === 1 ? 'morgen' : dateStr;
+          const endTime4 = app.end ? new Date(app.end * 1000) : null;
+          const endTimeStr4 = endTime4 ? `${endTime4.getHours().toString().padStart(2,'0')}:${endTime4.getMinutes().toString().padStart(2,'0')}` : '';
+          const fullTimeStr4 = endTimeStr4 ? `${timeStr}-${endTimeStr4}` : timeStr;
+          notifications.push({ title: `${subject} docent gewijzigd`, body: `${fullTimeStr4} → ${tchers || 'geen docent'} • ${dayLabel3}` });
+        }
+
+        if (app.locationChanged || app.teacherChanged || !prev) {
+          state.knownState[appId] = { locations: locs, teachers: tchers };
+        }
+      }
+    }
+
+    for (const id of Object.keys(state.knownState)) {
+      if (!seenIds.has(Number(id))) delete state.knownState[id];
+    }
+    for (const id of state.knownCancelled) {
+      if (!seenIds.has(id)) state.knownCancelled.delete(id);
+    }
+
+    saveState();
+
+    for (const n of notifications) {
+      // Lokale melding als app open is
+      if ('Notification' in window && Notification.permission === 'granted') {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(n.title, {
+            body: n.body,
+            icon: 'icon-192.png',
+            badge: 'icon-192.png',
+            vibrate: [200, 100, 200],
+            tag: 'uitval-' + Date.now(),
+          });
+        });
+      }
+    }
+
+    renderAppointments();
+
+    const now = new Date();
+    lastCheckDiv.textContent = `Laatste check: ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+
+  } catch (e) {
+    console.error('Check error:', e);
+    lastCheckDiv.textContent = `Fout bij controleren: ${e.message}`;
+  }
+}
+
+// ============================================================
+// Monitoring
+// ============================================================
+function startMonitoring() {
+  stopMonitoring();
+  checkCancellations();
+  state.checkInterval = setInterval(checkCancellations, CHECK_INTERVAL);
+}
+
+function stopMonitoring() {
+  if (state.checkInterval) {
+    clearInterval(state.checkInterval);
+    state.checkInterval = null;
+  }
+}
+
+// ============================================================
+// Render appointments
+// ============================================================
+function renderLessonHtml(app) {
+  const subject = app.subjects?.[0] || (app.type === 'activity' ? 'Activiteit' : 'Onbekend');
+  const startTime = app.start ? new Date(app.start * 1000) : null;
+  const endTime = app.end ? new Date(app.end * 1000) : null;
+  const timeStr = startTime && endTime
+    ? `${startTime.getHours().toString().padStart(2,'0')}:${startTime.getMinutes().toString().padStart(2,'0')} - ${endTime.getHours().toString().padStart(2,'0')}:${endTime.getMinutes().toString().padStart(2,'0')}`
+    : '';
+  const location = app.locations?.join(', ') || '';
+  const teacher = app.teachers?.join(', ') || '';
+  const groups = app.groups?.join(', ') || '';
+  const cancelled = app.cancelled;
+  const changeDesc = app.changeDescription || '';
+  const locChanged = app.locationChanged;
+  const tchChanged = app.teacherChanged;
+
+  let cls = 'lesson';
+  if (cancelled) cls += ' cancelled';
+  if ((locChanged || tchChanged) && !cancelled) cls += ' changed';
+
+  let html = `<div class="${cls}">`;
+  html += `<div class="time">${timeStr}</div>`;
+  html += `<div class="subject">${subject}</div>`;
+  if (teacher) html += `<div class="detail">${teacher}</div>`;
+  if (location) html += `<div class="detail">${location}</div>`;
+  if (groups) html += `<div class="detail">${groups}</div>`;
+  if (cancelled) html += `<div class="cancelled-badge">UITGEVALLEN</div>`;
+  if (locChanged) html += `<span class="changed-badge">LOKAAL GEWIJZIGD</span>`;
+  if (tchChanged) html += `<span class="changed-badge">DOCENT GEWIJZIGD</span>`;
+  if (changeDesc) html += `<div class="detail" style="color:#d32f2f;font-size:.8rem;">${changeDesc}</div>`;
+  html += `</div>`;
+  return html;
+}
+
+function renderDayAppointments(date) {
+  fetchAppointments(date).then(apps => {
+    state.appointments = apps;
+    const sorted = apps.sort((a, b) => (a.start || 0) - (b.start || 0));
+    const cancelledCount = sorted.filter(a => a.cancelled).length;
+    const totalCount = sorted.length;
+
+    if (sorted.length === 0) {
+      lessonsContainer.innerHTML = '<p class="instruction" style="text-align:center;padding:20px 0;">Geen lessen op deze dag</p>';
+      return;
+    }
+
+    const changedCount = sorted.filter(a => a.locationChanged || a.teacherChanged).length;
+    let html = `<p class="lesson-count">${totalCount} les(sen) · ${cancelledCount} uitgevallen · ${changedCount} gewijzigd</p>`;
+    for (const app of sorted) {
+      html += renderLessonHtml(app);
+    }
+    lessonsContainer.innerHTML = html;
+  }).catch(e => {
+    lessonsContainer.innerHTML = `<p class="instruction" style="text-align:center;padding:20px 0;color:#d32f2f;">Fout bij laden: ${e.message}</p>`;
+  });
+}
+
+function renderWeekAppointments(weekStart) {
+  fetchWeekAppointments(weekStart).then(apps => {
+    state.appointments = apps;
+    const days = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+
+    const groups = {};
+    for (const app of apps) {
+      if (!app.start) continue;
+      const d = new Date(app.start * 1000);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(app);
+    }
+
+    if (Object.keys(groups).length === 0) {
+      lessonsContainer.innerHTML = '<p class="instruction" style="text-align:center;padding:20px 0;">Geen lessen deze week</p>';
+      return;
+    }
+
+    const now = new Date();
+    let html = '';
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const dayApps = groups[key] || [];
+      const isToday = d.toDateString() === now.toDateString();
+      const dayName = days[d.getDay()];
+      const dateNum = d.getDate();
+      const monthNum = d.getMonth() + 1;
+
+      html += `<div class="week-day-header${isToday ? ' today' : ''}">${dayName} ${dateNum}/${monthNum}</div>`;
+      if (dayApps.length === 0) {
+        html += `<div class="week-empty">Geen lessen</div>`;
+      } else {
+        const sorted = dayApps.sort((a, b) => (a.start || 0) - (b.start || 0));
+        for (const app of sorted) html += renderLessonHtml(app);
+      }
+    }
+    lessonsContainer.innerHTML = html;
+  }).catch(e => {
+    lessonsContainer.innerHTML = `<p class="instruction" style="text-align:center;padding:20px 0;color:#d32f2f;">Fout bij laden: ${e.message}</p>`;
+  });
+}
+
+function renderAppointments() {
+  const date = state.currentDate;
+  if (state.viewMode === 'week') {
+    const weekStart = getWeekStart(date);
+    currentDateSpan.textContent = formatWeekRange(weekStart);
+    renderWeekAppointments(weekStart);
+  } else {
+    currentDateSpan.textContent = formatDate(date);
+    renderDayAppointments(date);
+  }
+}
+
+// ============================================================
+// Navigation
+// ============================================================
+function changeDate(delta) {
+  const newDate = new Date(state.currentDate);
+  if (state.viewMode === 'week') {
+    newDate.setDate(newDate.getDate() + delta * 7);
+  } else {
+    newDate.setDate(newDate.getDate() + delta);
+  }
+  state.currentDate = newDate;
+  renderAppointments();
+}
+
+// ============================================================
+// UI helpers
+// ============================================================
+function showLogin() {
+  loginScreen.classList.remove('hidden');
+  mainScreen.classList.add('hidden');
+  stopMonitoring();
+}
+
+function showMain() {
+  loginScreen.classList.add('hidden');
+  mainScreen.classList.remove('hidden');
+  monitorToggle.checked = state.monitoring;
+  checkNotificationPermission();
+  renderAppointments();
+  if (state.monitoring) startMonitoring();
+  // Registreer bij Apps Script backend
+  registerToBackend();
+}
+
+// ============================================================
+// Event listeners
+// ============================================================
+loginBtn.addEventListener('click', async () => {
+  const school = schoolInp.value.trim();
+  const code = authcodeInp.value.trim();
+  if (!school || !code) {
+    errorDiv.textContent = 'Vul school en koppelcode in.';
+    return;
+  }
+  errorDiv.textContent = '';
+  statusDiv.textContent = 'Inloggen...';
+  loginBtn.disabled = true;
+  try {
+    await authenticate(school, code);
+    showMain();
+  } catch (e) {
+    errorDiv.textContent = 'Fout: ' + e.message;
+  }
+  statusDiv.textContent = '';
+  loginBtn.disabled = false;
+});
+
+logoutBtn.addEventListener('click', () => {
+  clearState();
+  showLogin();
+  schoolInp.value = '';
+  authcodeInp.value = '';
+});
+
+monitorToggle.addEventListener('change', () => {
+  state.monitoring = monitorToggle.checked;
+  if (state.monitoring) {
+    startMonitoring();
+  } else {
+    stopMonitoring();
+    lastCheckDiv.textContent = 'Monitoring uitgeschakeld';
+  }
+  saveState();
+});
+
+prevDayBtn.addEventListener('click', () => changeDate(-1));
+nextDayBtn.addEventListener('click', () => changeDate(1));
+
+
+viewDayBtn.addEventListener('click', () => {
+  viewDayBtn.classList.add('active');
+  viewWeekBtn.classList.remove('active');
+  state.viewMode = 'day';
+  renderAppointments();
+});
+
+viewWeekBtn.addEventListener('click', () => {
+  viewWeekBtn.classList.add('active');
+  viewDayBtn.classList.remove('active');
+  state.viewMode = 'week';
+  renderAppointments();
+});
+
+// ============================================================
+// Init
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  if (loadState() && state.school && state.token) {
+    try {
+      await apiGet('users/~me');
+      showMain();
+    } catch (e) {
+      showLogin();
+    }
+  } else {
+    showLogin();
+  }
+});
+</script>
+</body>
+</html>
